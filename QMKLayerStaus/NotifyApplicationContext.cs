@@ -149,7 +149,7 @@ namespace QMKLayerStaus
                     if (notifyIconLayer.Text == "No device detected" || notifyIconLayer.Text == "Monitoring Turned Off")
                     {
                         notifyIconLayer.Icon = Resources.baselayer;
-                        notifyIconLayer.Text = "Base";
+                        notifyIconLayer.Text = "(Unknown)";
                     }
                 }
             }
@@ -187,6 +187,9 @@ namespace QMKLayerStaus
                     }
                 }
             }
+
+            if (_devices.Count == 0)
+                return;
 
             bool _checked = false;
             {
@@ -237,35 +240,27 @@ namespace QMKLayerStaus
                 var outputString = string.Empty;
                 for (var i = 0; i < data.Length; i++)
                 {
+                    if ((char)data[i] == '\0')
+                        break;
                     outputString += (char)data[i];
-
                 }
 
-                string _layer = outputString.Substring(0, 9);
+                string _layer = outputString.Trim();
 
-                switch (outputString.Substring(0, 9))
+                switch (_layer)
                 {
-                    case "Layer_BAS":
-                        if (Control.IsKeyLocked(Keys.CapsLock))
-                        {
-                            notifyIconLayer.Icon = Resources.capslayer;
-                            notifyIconLayer.Text = "CAPS";
-                        }
-                        else
-                        {
-                            notifyIconLayer.Icon = Resources.baselayer;
-                            notifyIconLayer.Text = "Base";
-                        }
-                        break;
-                    case "Layer_NUM":
-                        notifyIconLayer.Icon = Resources.numberlayer;
-                        notifyIconLayer.Text = "Number";
-                        break;
-                    case "Layer_ACT":
+                    case string s when s.StartsWith("Layer_MOUSE"):
                         notifyIconLayer.Icon = Resources.actionlayer;
-                        notifyIconLayer.Text = "Action";
+                        notifyIconLayer.Text = "Mouse";
                         break;
-
+                    case string s when s.StartsWith("Layer_POINTER"):
+                        notifyIconLayer.Icon = Resources.numberlayer;
+                        notifyIconLayer.Text = "Pointer";
+                        break;
+                    case string s when s.StartsWith("Layer_"):
+                        notifyIconLayer.Icon = Resources.baselayer;
+                        notifyIconLayer.Text = _layer;
+                        break;
                 }
 
                 outputString = string.Empty;
@@ -290,9 +285,7 @@ namespace QMKLayerStaus
 
         public static string GetDeviceInfo(IHidDevice d)
         {
-
-
-            return GetManufacturerString(d) + ":" + GetProductString(d) + ":" + Convert.ToString(d.Attributes.VendorId,16) + ":" + Convert.ToString(d.Attributes.ProductId,16) + ":" + Convert.ToString(d.Attributes.Version,16);
+           return GetManufacturerString(d) + ":" + GetProductString(d) + ":" + Convert.ToString(d.Attributes.VendorId,16) + ":" + Convert.ToString(d.Attributes.ProductId,16) + ":" + Convert.ToString(d.Attributes.Version,16);
            // { GetProductString(device)} ({ device.Attributes.VendorId:X4}:{ device.Attributes.ProductId:X4}:{ device.Attributes.Version:X4})", MessageType.Hid);
         }
         private static string GetProductString(IHidDevice d)

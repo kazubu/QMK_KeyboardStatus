@@ -50,10 +50,10 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup>
-    <ManifestCertificateThumbprint>447940D56A3E85C5FAF83A975CADA5F065BF12B9</ManifestCertificateThumbprint>
+    <ManifestCertificateThumbprint>5F91771532378976036F5CF365094D25225F8072</ManifestCertificateThumbprint>
   </PropertyGroup>
   <PropertyGroup>
-    <ManifestKeyFile>QMKLayerStaus_TemporaryKey.pfx</ManifestKeyFile>
+    <ManifestKeyFile>QMKStatus_TemporaryKey.pfx</ManifestKeyFile>
   </PropertyGroup>
   <PropertyGroup>
     <GenerateManifests>true</GenerateManifests>
@@ -108,6 +108,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="QMKLayerStaus_TemporaryKey.pfx" />
+    <None Include="QMKStatus_TemporaryKey.pfx" />
     <None Include="Resources\baselayer_FhF_icon.ico" />
     <None Include="Resources\numberlayer_tKx_icon.ico" />
     <None Include="Resources\actionlayer_2Sx_icon.ico" />
