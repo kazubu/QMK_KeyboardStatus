@@ -16,13 +16,14 @@ namespace QMKLayerStaus
     {
         NotifyIcon notifyIconLayer = new NotifyIcon();
 
-
         private List<HidDevice> _devices = new List<HidDevice>();
         bool _monitorDevice = true;
         HidDevice _ActiveDevice;
         MenuItem miExit = new MenuItem();
         MenuItem miMonitor = new MenuItem();
         MenuItem miDevices = new MenuItem();
+
+        CursorManager cm = new CursorManager();
 
         public NotifyApplicationContext()
         {
@@ -32,8 +33,6 @@ namespace QMKLayerStaus
             miExit.Click += MiExit_Click;
             miDevices.Index = 1;
             miDevices.Text = "Available Devices";
-            
-
 
             miMonitor.Index = 2;
             miMonitor.Checked = true;
@@ -169,7 +168,11 @@ namespace QMKLayerStaus
                         dmi = mi;
                     }
                 }
-                miDevices.MenuItems.Remove(dmi);
+
+                if (dmi != null)
+                {
+                    miDevices.MenuItems.Remove(dmi);
+                }
 
             }
             else
@@ -252,14 +255,19 @@ namespace QMKLayerStaus
                     case string s when s.StartsWith("Layer_MOUSE"):
                         notifyIconLayer.Icon = Resources.actionlayer;
                         notifyIconLayer.Text = "Mouse";
+                        cm.RestoreCursorColor();
+                        cm.ChangeCursorColor(Color.OrangeRed);
                         break;
                     case string s when s.StartsWith("Layer_POINTER"):
                         notifyIconLayer.Icon = Resources.numberlayer;
                         notifyIconLayer.Text = "Pointer";
+                        cm.RestoreCursorColor();
+                        cm.ChangeCursorColor(Color.DarkCyan);
                         break;
                     case string s when s.StartsWith("Layer_"):
                         notifyIconLayer.Icon = Resources.baselayer;
                         notifyIconLayer.Text = _layer;
+                        cm.RestoreCursorColor();
                         break;
                 }
 
