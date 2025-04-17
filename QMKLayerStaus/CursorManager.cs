@@ -103,8 +103,10 @@ public class CursorManager
         int width = source.Width;
         int height = source.Height;
 
-        BITMAPINFO bi = new BITMAPINFO();
-        bi.bmiColors = new uint[256];
+        BITMAPINFO bi = new BITMAPINFO
+        {
+            bmiColors = new uint[256]
+        };
         bi.bmiHeader.biSize = (uint)Marshal.SizeOf(typeof(BITMAPINFOHEADER));
         bi.bmiHeader.biWidth = width;
         bi.bmiHeader.biHeight = -height;
@@ -112,8 +114,7 @@ public class CursorManager
         bi.bmiHeader.biBitCount = 32;
         bi.bmiHeader.biCompression = 0;
 
-        IntPtr bits;
-        IntPtr hBitmap = CreateDIBSection(IntPtr.Zero, ref bi, 0, out bits, IntPtr.Zero, 0);
+        IntPtr hBitmap = CreateDIBSection(IntPtr.Zero, ref bi, 0, out IntPtr bits, IntPtr.Zero, 0);
 
         BitmapData data = source.LockBits(new Rectangle(0, 0, width, height),
             ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
@@ -197,12 +198,14 @@ public class CursorManager
                     hbmColor = CreateColorDibSection(tinted);
                     hbmMask = CreateFlatMaskBitmap(tinted.Width, tinted.Height);
 
-                    ICONINFO iconInfo = new ICONINFO();
-                    iconInfo.fIcon = false;
-                    iconInfo.xHotspot = originalInfo.xHotspot;
-                    iconInfo.yHotspot = originalInfo.yHotspot;
-                    iconInfo.hbmColor = hbmColor;
-                    iconInfo.hbmMask = hbmMask;
+                    ICONINFO iconInfo = new ICONINFO
+                    {
+                        fIcon = false,
+                        xHotspot = originalInfo.xHotspot,
+                        yHotspot = originalInfo.yHotspot,
+                        hbmColor = hbmColor,
+                        hbmMask = hbmMask
+                    };
 
 #if DEBUG
                     if (iconInfo.hbmColor != IntPtr.Zero)

@@ -14,16 +14,16 @@ namespace QMKLayerStaus
     using System.Windows.Forms;
     class NotifyApplicationContext : ApplicationContext
     {
-        NotifyIcon notifyIconLayer = new NotifyIcon();
+        readonly NotifyIcon notifyIconLayer = new NotifyIcon();
 
         private List<HidDevice> _devices = new List<HidDevice>();
         bool _monitorDevice = true;
         HidDevice _ActiveDevice;
-        MenuItem miExit = new MenuItem();
-        MenuItem miMonitor = new MenuItem();
-        MenuItem miDevices = new MenuItem();
+        readonly MenuItem miExit = new MenuItem();
+        readonly MenuItem miMonitor = new MenuItem();
+        readonly MenuItem miDevices = new MenuItem();
 
-        CursorManager cm = new CursorManager();
+        readonly CursorManager cm = new CursorManager();
 
         public NotifyApplicationContext()
         {
@@ -95,22 +95,20 @@ namespace QMKLayerStaus
 
         private void DeviceEvent(object sender, EventArrivedEventArgs e)
         {
-            
+
             (sender as ManagementEventWatcher)?.Stop();
 
-            if (!(e.NewEvent["TargetInstance"] is ManagementBaseObject instance))
+            if (e.NewEvent["TargetInstance"] is ManagementBaseObject)
             {
-                return;
+                var deviceDisconnected = e.NewEvent.ClassPath.ClassName.Equals("__InstanceDeletionEvent");
+
+                UpdateHidDevices(deviceDisconnected);
+
+                (sender as ManagementEventWatcher)?.Start();
             }
 
-            var deviceDisconnected = e.NewEvent.ClassPath.ClassName.Equals("__InstanceDeletionEvent");
-
-            UpdateHidDevices(deviceDisconnected);
-            
-            (sender as ManagementEventWatcher)?.Start();
-  
         }
-  
+
         private void UpdateHidDevices(bool disconnected)
         {
             if (_monitorDevice)
@@ -182,9 +180,12 @@ namespace QMKLayerStaus
                     
                     if (miDevices.MenuItems.Find(h.DevicePath,false).Length == 0)
                     {
-                        MenuItem nmi = new MenuItem();
-                        nmi.Name = h.DevicePath;
-                        nmi.Text = GetDeviceInfo(h);
+                        MenuItem nmi = new MenuItem
+                        {
+                            Name = h.DevicePath,
+                            Text = GetDeviceInfo(h)
+                        };
+
                         nmi.Click += Device_Click;
                         miDevices.MenuItems.Add(nmi);
                     }
