@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 
-public class CursorManager
+public class CursorManager : IDisposable
 {
     [DllImport("user32.dll", SetLastError = true)]
     static extern bool SetSystemCursor(IntPtr hCursor, uint id);
@@ -296,15 +296,21 @@ public class CursorManager
     {
         foreach (var colorDict in _cache.Values)
         {
-            foreach (var bitmaps in colorDict.Values)
+            foreach (var (hbmColor, hbmMask) in colorDict.Values)
             {
-                if (bitmaps.hbmColor != IntPtr.Zero)
-                    DeleteObject(bitmaps.hbmColor);
-                if (bitmaps.hbmMask != IntPtr.Zero)
-                    DeleteObject(bitmaps.hbmMask);
+                if (hbmColor != IntPtr.Zero)
+                    DeleteObject(hbmColor);
+                if (hbmMask != IntPtr.Zero)
+                    DeleteObject(hbmMask);
             }
             colorDict.Clear();
         }
         _cache.Clear();
+    }
+    
+    public void Dispose()
+    {
+        RestoreCursorColor();
+        DisposeCache();
     }
 }

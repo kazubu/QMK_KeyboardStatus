@@ -124,8 +124,7 @@ namespace QMKLayerStaus
                     device.CloseDevice();
                 }
 
-                cm.RestoreCursorColor();
-                cm.DisposeCache();
+                cm.Dispose();
 
                 CleanupWatchers();
                 notifyIconLayer.Dispose();
