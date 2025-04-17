@@ -56,22 +56,6 @@ public class CursorManager
         public IntPtr hbmColor;
     }
 
-    readonly Dictionary<uint, Cursor> SystemCursorsX = new Dictionary<uint, Cursor>()
-    {
-        { 32512, Cursors.Arrow },
-        { 32513, Cursors.IBeam },
-        { 32514, Cursors.WaitCursor },
-        { 32515, Cursors.Cross },
-        { 32516, Cursors.UpArrow },
-        { 32517, Cursors.SizeNWSE },
-        { 32518, Cursors.SizeNESW },
-        { 32519, Cursors.SizeWE },
-        { 32520, Cursors.SizeNS },
-        { 32521, Cursors.SizeAll },
-        { 32522, Cursors.No },
-        { 32524, Cursors.Hand }
-    };
-
     readonly Dictionary<uint, Cursor> SystemCursors = new Dictionary<uint, Cursor>()
     {
         { 32512u, Cursors.Arrow    }, // OCR_NORMAL
