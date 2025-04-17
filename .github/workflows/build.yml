@@ -1,0 +1,60 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Visual Studio
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build
+      run: |
+        msbuild QMKStatus.sln  /p:Platform="Any CPU" /p:Configuration=Release /p:TargetFrameworkVersion=v4.7.2
+
+    - name: Archive build artifacts
+      run: |
+        mkdir artifacts
+        copy .\QMKLayerStaus\bin\Release\* artifacts\
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: release
+        path: artifacts/
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [ build ]
+
+    steps:
+      - name: Download binaries
+        if: always() && !cancelled()
+        uses: actions/download-artifact@v4
+        with:
+          name: release
+
+      - name: Create ZIP
+        run: |
+          zip -r release.zip *
+
+      - name: Generate Release
+        uses: softprops/action-gh-release@v2
+        if: always() && !cancelled()
+        with:
+          token: ${{ github.token }}
+          name: Latest App
+          tag_name: 'latest'
+          fail_on_unmatched_files: false
+          draft: false
+          prerelease: false
+          files: |
+            **/*.zip

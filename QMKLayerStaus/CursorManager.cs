@@ -210,17 +210,8 @@ public class CursorManager
                     IntPtr hbmColor;
                     IntPtr hbmMask;
 
-                    if (originalInfo.hbmColor == IntPtr.Zero)
-                    {
-                        Console.WriteLine($"[Cursor {cursorId}] is monochrome.");
-                        hbmColor = CreateColorDibSection(tinted);
-                        hbmMask = CreateFlatMaskBitmap(tinted.Width, tinted.Height);
-                    } else
-                    {
-                        Console.WriteLine($"[Cursor {cursorId}] is color.");
-                        hbmColor = CreateColorDibSection(tinted);
-                        hbmMask = CreateFlatMaskBitmap(tinted.Width, tinted.Height);
-                    }
+                    hbmColor = CreateColorDibSection(tinted);
+                    hbmMask = CreateFlatMaskBitmap(tinted.Width, tinted.Height);
 
                     ICONINFO iconInfo = new ICONINFO();
                     iconInfo.fIcon = false;
