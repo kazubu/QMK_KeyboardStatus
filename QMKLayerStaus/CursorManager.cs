@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Forms;
 
 public class CursorManager
@@ -103,6 +104,15 @@ public class CursorManager
         public uint biClrImportant;
     }
 
+    private readonly Dictionary<uint, Dictionary<Color, (IntPtr hbmColor, IntPtr hbmMask)>> _cache = new Dictionary<uint, Dictionary<Color, (IntPtr hbmColor, IntPtr hbmMask)>>();
+
+    private readonly SynchronizationContext _syncContext;
+
+    public CursorManager()
+    {
+        _syncContext = SynchronizationContext.Current;
+    }
+
     private IntPtr CreateColorDibSection(Bitmap source)
     {
         int width = source.Width;
@@ -156,128 +166,69 @@ public class CursorManager
         }
     }
 
-    public void ChangeCursorColor(Color color)
+    public void ChangeCursorColor(Color tint)
     {
         foreach (var kvp in SystemCursors)
         {
             uint cursorId = kvp.Key;
             Cursor sysCursor = kvp.Value;
-            IntPtr hOriginal = sysCursor.Handle;
 
-            if (!GetIconInfo(hOriginal, out ICONINFO originalInfo))
+            if (!_cache.TryGetValue(cursorId, out var colorDict))
             {
-                Console.WriteLine($"[Cursor {cursorId}] GetIconInfo failed.");
-                continue;
+                colorDict = new Dictionary<Color, (IntPtr hbmColor, IntPtr hbmMask)>();
+                _cache[cursorId] = colorDict;
             }
 
-#if DEBUG
-
-            // Dump cursor bitmap info
-            if (originalInfo.hbmColor != IntPtr.Zero)
-            {
-                if (GetObject(originalInfo.hbmColor, Marshal.SizeOf(typeof(BITMAP)), out BITMAP bmpColor) != 0)
-                {
-                    Console.WriteLine($"[Original Cursor {cursorId}] Color Bitmap: {bmpColor.bmWidth}x{bmpColor.bmHeight}, {bmpColor.bmBitsPixel}bpp");
-                }
-            }
-            else
-            {
-                Console.WriteLine($"[Original Cursor {cursorId}] No hbmColor.");
-            }
-
-            if (originalInfo.hbmMask != IntPtr.Zero)
-            {
-                if (GetObject(originalInfo.hbmMask, Marshal.SizeOf(typeof(BITMAP)), out BITMAP bmpMask) != 0)
-                {
-                    Console.WriteLine($"[Original Cursor {cursorId}] Mask Bitmap: {bmpMask.bmWidth}x{bmpMask.bmHeight}, {bmpMask.bmBitsPixel}bpp");
-                }
-            }
-            else
-            {
-                Console.WriteLine($"[Original Cursor {cursorId}] No hbmMask.");
-            }
-            Console.WriteLine($"[Original Cursor {cursorId}] Hotspot: {originalInfo.xHotspot}x{originalInfo.yHotspot}");
-#endif
-
-            try
+            if (!colorDict.TryGetValue(tint, out var bitmaps))
             {
                 using (var bmp = new Bitmap(sysCursor.Size.Width, sysCursor.Size.Height))
+                using (var g = Graphics.FromImage(bmp))
                 {
-                    using (Graphics g = Graphics.FromImage(bmp))
-                        sysCursor.Draw(g, new Rectangle(Point.Empty, bmp.Size));
+                    sysCursor.Draw(g, new Rectangle(Point.Empty, bmp.Size));
 
-                    IntPtr hbmColor;
-                    IntPtr hbmMask;
-
-                    using (Bitmap tinted = TintCursorColor(bmp, color))
+                    using (var tinted = TintCursorColor(bmp, tint))
                     {
-                        hbmColor = CreateColorDibSection(tinted);
-                        hbmMask = CreateFlatMaskBitmap(tinted.Width, tinted.Height);
-                    }
-                    
-                    ICONINFO iconInfo = new ICONINFO
-                    {
-                        fIcon = false,
-                        xHotspot = originalInfo.xHotspot,
-                        yHotspot = originalInfo.yHotspot,
-                        hbmColor = hbmColor,
-                        hbmMask = hbmMask
-                    };
-
-#if DEBUG
-                    if (iconInfo.hbmColor != IntPtr.Zero)
-                    {
-                        if (GetObject(iconInfo.hbmColor, Marshal.SizeOf(typeof(BITMAP)), out BITMAP bmpColor) != 0)
-                        {
-                            Console.WriteLine($"[Changed Cursor {cursorId}] Color Bitmap: {bmpColor.bmWidth}x{bmpColor.bmHeight}, {bmpColor.bmBitsPixel}bpp");
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine($"[Changed Cursor {cursorId}] No hbmColor.");
-                    }
-
-                    if (iconInfo.hbmMask != IntPtr.Zero)
-                    {
-                        if (GetObject(iconInfo.hbmMask, Marshal.SizeOf(typeof(BITMAP)), out BITMAP bmpMask) != 0)
-                        {
-                            Console.WriteLine($"[Changed Cursor {cursorId}] Mask Bitmap: {bmpMask.bmWidth}x{bmpMask.bmHeight}, {bmpMask.bmBitsPixel}bpp");
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine($"[Changed Cursor {cursorId}] No hbmMask.");
-                    }
-#endif
-
-                    try
-                    {
-                        IntPtr hCursor = CreateIconIndirect(ref iconInfo);
-
-                        if (hCursor == IntPtr.Zero || !SetSystemCursor(hCursor, cursorId))
-                        {
-                            int err = Marshal.GetLastWin32Error();
-                            Console.Error.WriteLine($"SetSystemCursor failed for ID {cursorId}, LastError={err}");
-                        }
-
-                        if (!DestroyIcon(hCursor))
-                            Debug.WriteLine($"DestroyIcon failed: {Marshal.GetLastWin32Error():X}");
-                    }
-                    finally
-                    {
-                        DeleteObject(hbmColor);
-                        DeleteObject(hbmMask);
-                        if (originalInfo.hbmColor != IntPtr.Zero) DeleteObject(originalInfo.hbmColor);
-                        if (originalInfo.hbmMask != IntPtr.Zero) DeleteObject(originalInfo.hbmMask);
+                        IntPtr hbmColor = CreateColorDibSection(tinted);
+                        IntPtr hbmMask = CreateFlatMaskBitmap(tinted.Width, tinted.Height);
+                        bitmaps = (hbmColor, hbmMask);
+                        colorDict[tint] = bitmaps;
                     }
                 }
             }
-            catch (Exception ex)
+
+            if (GetIconInfo(sysCursor.Handle, out ICONINFO originalInfo))
             {
-                Console.Error.WriteLine($"Error processing cursor ID {cursorId}: {ex.Message}");
+                if (originalInfo.hbmColor != IntPtr.Zero) DeleteObject(originalInfo.hbmColor);
+                if (originalInfo.hbmMask != IntPtr.Zero) DeleteObject(originalInfo.hbmMask);
             }
+
+            var iconInfo = new ICONINFO
+            {
+                fIcon = false,
+                xHotspot = originalInfo.xHotspot,
+                yHotspot = originalInfo.yHotspot,
+                hbmColor = bitmaps.hbmColor,
+                hbmMask = bitmaps.hbmMask
+            };
+
+            void ApplyCursor()
+            {
+                IntPtr hCursor = CreateIconIndirect(ref iconInfo);
+                if (hCursor == IntPtr.Zero || !SetSystemCursor(hCursor, cursorId))
+                {
+                    int err = Marshal.GetLastWin32Error();
+                    Debug.WriteLine($"SetSystemCursor failed for ID {cursorId}: 0x{err:X}");
+                }
+                DestroyIcon(hCursor);
+            }
+
+            if (_syncContext != null)
+                _syncContext.Send(_ => ApplyCursor(), null);
+            else
+                ApplyCursor();
         }
     }
+
 
     public void RestoreCursorColor()
     {
@@ -339,5 +290,21 @@ public class CursorManager
         }
 
         return newBmp;
+    }
+
+    public void DisposeCache()
+    {
+        foreach (var colorDict in _cache.Values)
+        {
+            foreach (var bitmaps in colorDict.Values)
+            {
+                if (bitmaps.hbmColor != IntPtr.Zero)
+                    DeleteObject(bitmaps.hbmColor);
+                if (bitmaps.hbmMask != IntPtr.Zero)
+                    DeleteObject(bitmaps.hbmMask);
+            }
+            colorDict.Clear();
+        }
+        _cache.Clear();
     }
 }

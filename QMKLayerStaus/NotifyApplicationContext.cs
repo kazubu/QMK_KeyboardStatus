@@ -115,7 +115,6 @@ namespace QMKLayerStaus
         {
             if (disposing)
             {
-                Console.WriteLine("disposing...");
                 foreach(var device in _devices)
                 {
                     if (device == null)
@@ -126,6 +125,8 @@ namespace QMKLayerStaus
                 }
 
                 cm.RestoreCursorColor();
+                cm.DisposeCache();
+
                 CleanupWatchers();
                 notifyIconLayer.Dispose();
             }
