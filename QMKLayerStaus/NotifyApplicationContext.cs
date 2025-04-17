@@ -25,9 +25,10 @@ namespace QMKLayerStaus
 
         readonly CursorManager cm = new CursorManager();
 
+        private readonly List<ManagementEventWatcher> _watchers = new List<ManagementEventWatcher>();
+
         public NotifyApplicationContext()
         {
-
             miExit.Index = 0;
             miExit.Text = "Close";
             miExit.Click += MiExit_Click;
@@ -51,12 +52,12 @@ namespace QMKLayerStaus
             notifyIconLayer.ContextMenu.MenuItems.Add(miMonitor);
             UpdateHidDevices(false);
             StartListeningForDeviceEvents();
-
         }
 
         private void MiExit_Click(object sender, EventArgs e)
         {
             notifyIconLayer.Visible = false;
+            Dispose(true);
             ExitThread();
         }
 
@@ -91,11 +92,49 @@ namespace QMKLayerStaus
             var watcher = new ManagementEventWatcher($"SELECT * FROM {eventType} WITHIN 2 WHERE TargetInstance ISA 'Win32_PnPEntity'");
             watcher.EventArrived += DeviceEvent;
             watcher.Start();
+            _watchers.Add(watcher);
+        }
+        private void CleanupWatchers()
+        {
+            foreach (var w in _watchers)
+            {
+                w.EventArrived -= DeviceEvent;
+                try { w.Stop(); } catch { }
+                w.Dispose();
+            }
+            _watchers.Clear();
+        }
+
+        protected override void OnMainFormClosed(object sender, EventArgs e)
+        {
+            Dispose(true);
+            base.OnMainFormClosed(sender, e);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                Console.WriteLine("disposing...");
+                foreach(var device in _devices)
+                {
+                    if (device == null)
+                        continue;
+                    device.MonitorDeviceEvents = false;
+                    device.ReadReport(null);
+                    device.CloseDevice();
+                }
+
+                cm.RestoreCursorColor();
+                CleanupWatchers();
+                notifyIconLayer.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
 
         private void DeviceEvent(object sender, EventArrivedEventArgs e)
         {
-
             (sender as ManagementEventWatcher)?.Stop();
 
             if (e.NewEvent["TargetInstance"] is ManagementBaseObject)
@@ -106,7 +145,6 @@ namespace QMKLayerStaus
 
                 (sender as ManagementEventWatcher)?.Start();
             }
-
         }
 
         private void UpdateHidDevices(bool disconnected)
@@ -114,7 +152,6 @@ namespace QMKLayerStaus
             if (_monitorDevice)
             {
                 var devices = GetListableDevices().ToList();
-
 
                 if (!disconnected)
                 {
@@ -150,8 +187,6 @@ namespace QMKLayerStaus
                     }
                 }
             }
-
-
         }
 
         private void UpdateDeviceMenu(bool disconnected)
@@ -171,13 +206,11 @@ namespace QMKLayerStaus
                 {
                     miDevices.MenuItems.Remove(dmi);
                 }
-
             }
             else
             {
                 foreach (HidDevice h in _devices)
                 {
-                    
                     if (miDevices.MenuItems.Find(h.DevicePath,false).Length == 0)
                     {
                         MenuItem nmi = new MenuItem
@@ -210,7 +243,6 @@ namespace QMKLayerStaus
             {
                 Device_Click(miDevices.MenuItems[0], new EventArgs());
             }
-
         }
 
         private void Device_Click(object sender, EventArgs e)
@@ -228,7 +260,6 @@ namespace QMKLayerStaus
                         _ActiveDevice.MonitorDeviceEvents = false;
                         _ActiveDevice.ReadReport(OnReport);
                         _ActiveDevice.CloseDevice();
-
                     }
                 }
             }
@@ -275,13 +306,7 @@ namespace QMKLayerStaus
                 outputString = string.Empty;
 
                 _ActiveDevice.ReadReport(OnReport);
-                //foreach (var device in _devices)
-                //{
-                //    device.ReadReport(OnReport);
-                //}
-
             }
-
         }
 
         private static IEnumerable<HidDevice> GetListableDevices() =>
@@ -295,7 +320,6 @@ namespace QMKLayerStaus
         public static string GetDeviceInfo(IHidDevice d)
         {
            return GetManufacturerString(d) + ":" + GetProductString(d) + ":" + Convert.ToString(d.Attributes.VendorId,16) + ":" + Convert.ToString(d.Attributes.ProductId,16) + ":" + Convert.ToString(d.Attributes.Version,16);
-           // { GetProductString(device)} ({ device.Attributes.VendorId:X4}:{ device.Attributes.ProductId:X4}:{ device.Attributes.Version:X4})", MessageType.Hid);
         }
         private static string GetProductString(IHidDevice d)
         {
@@ -310,12 +334,5 @@ namespace QMKLayerStaus
             d.ReadManufacturer(out var bs);
             return System.Text.Encoding.Default.GetString(bs.Where(b => b > 0).ToArray());
         }
-
-
-       
-
-
     }
 }
-
-        

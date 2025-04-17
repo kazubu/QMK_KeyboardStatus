@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
@@ -21,6 +23,9 @@ public class CursorManager
 
     [DllImport("gdi32.dll")]
     private static extern int GetObject(IntPtr hObject, int nCount, out BITMAP lpObject);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    static extern bool DestroyIcon(IntPtr hIcon);
 
     [DllImport("gdi32.dll")]
     static extern bool DeleteObject(IntPtr hObject);
@@ -115,13 +120,16 @@ public class CursorManager
         bi.bmiHeader.biCompression = 0;
 
         IntPtr hBitmap = CreateDIBSection(IntPtr.Zero, ref bi, 0, out IntPtr bits, IntPtr.Zero, 0);
+        if (hBitmap == IntPtr.Zero)
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateDIBSection failed");
 
         BitmapData data = source.LockBits(new Rectangle(0, 0, width, height),
             ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
 
+        long byteCount = (long)width * height * 4; // 4 bytes per pixel
         unsafe
         {
-            Buffer.MemoryCopy((void*)data.Scan0, (void*)bits, width * height * 4, width * height * 4);
+            Buffer.MemoryCopy((void*)data.Scan0, (void*)bits, byteCount, byteCount);
         }
 
         source.UnlockBits(data);
@@ -136,9 +144,16 @@ public class CursorManager
         for (int i = 0; i < size; i++) bits[i] = 0xFF;
 
         GCHandle handle = GCHandle.Alloc(bits, GCHandleType.Pinned);
-        IntPtr hMask = CreateBitmap(width, height, 1, 1, handle.AddrOfPinnedObject());
-        handle.Free();
-        return hMask;
+        try
+        {
+            IntPtr hMask = CreateBitmap(width, height, 1, 1, handle.AddrOfPinnedObject());
+            if (hMask == IntPtr.Zero)
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateBitmap failed");
+
+            return hMask;
+        } finally {
+            handle.Free();
+        }
     }
 
     public void ChangeCursorColor(Color color)
@@ -191,13 +206,15 @@ public class CursorManager
                     using (Graphics g = Graphics.FromImage(bmp))
                         sysCursor.Draw(g, new Rectangle(Point.Empty, bmp.Size));
 
-                    Bitmap tinted = TintCursorColor(bmp, color);
                     IntPtr hbmColor;
                     IntPtr hbmMask;
 
-                    hbmColor = CreateColorDibSection(tinted);
-                    hbmMask = CreateFlatMaskBitmap(tinted.Width, tinted.Height);
-
+                    using (Bitmap tinted = TintCursorColor(bmp, color))
+                    {
+                        hbmColor = CreateColorDibSection(tinted);
+                        hbmMask = CreateFlatMaskBitmap(tinted.Width, tinted.Height);
+                    }
+                    
                     ICONINFO iconInfo = new ICONINFO
                     {
                         fIcon = false,
@@ -233,18 +250,26 @@ public class CursorManager
                     }
 #endif
 
-                    IntPtr hCursor = CreateIconIndirect(ref iconInfo);
-
-                    if (hCursor == IntPtr.Zero || !SetSystemCursor(hCursor, cursorId))
+                    try
                     {
-                        int err = Marshal.GetLastWin32Error();
-                        Console.Error.WriteLine($"SetSystemCursor failed for ID {cursorId}, LastError={err}");
-                    }
+                        IntPtr hCursor = CreateIconIndirect(ref iconInfo);
 
-                    DeleteObject(hbmColor);
-                    DeleteObject(hbmMask);
-                    DeleteObject(originalInfo.hbmColor);
-                    DeleteObject(originalInfo.hbmMask);
+                        if (hCursor == IntPtr.Zero || !SetSystemCursor(hCursor, cursorId))
+                        {
+                            int err = Marshal.GetLastWin32Error();
+                            Console.Error.WriteLine($"SetSystemCursor failed for ID {cursorId}, LastError={err}");
+                        }
+
+                        if (!DestroyIcon(hCursor))
+                            Debug.WriteLine($"DestroyIcon failed: {Marshal.GetLastWin32Error():X}");
+                    }
+                    finally
+                    {
+                        DeleteObject(hbmColor);
+                        DeleteObject(hbmMask);
+                        if (originalInfo.hbmColor != IntPtr.Zero) DeleteObject(originalInfo.hbmColor);
+                        if (originalInfo.hbmMask != IntPtr.Zero) DeleteObject(originalInfo.hbmMask);
+                    }
                 }
             }
             catch (Exception ex)
@@ -264,48 +289,54 @@ public class CursorManager
         Bitmap newBmp = new Bitmap(bmp.Width, bmp.Height, PixelFormat.Format32bppArgb);
         Rectangle rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
 
-        BitmapData srcData = bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-        BitmapData dstData = newBmp.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
-
-        unsafe
+        BitmapData srcData = null, dstData = null;
+        try
         {
-            byte* srcPtr = (byte*)srcData.Scan0;
-            byte* dstPtr = (byte*)dstData.Scan0;
-            int pixelBytes = 4;
+            srcData = bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            dstData = newBmp.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
 
-            for (int y = 0; y < bmp.Height; y++)
+            unsafe
             {
-                byte* srcRow = srcPtr + y * srcData.Stride;
-                byte* dstRow = dstPtr + y * dstData.Stride;
+                byte* srcPtr = (byte*)srcData.Scan0;
+                byte* dstPtr = (byte*)dstData.Scan0;
+                int pixelBytes = 4;
 
-                for (int x = 0; x < bmp.Width; x++)
+                for (int y = 0; y < bmp.Height; y++)
                 {
-                    int idx = x * pixelBytes;
-                    byte b = srcRow[idx + 0];
-                    byte g = srcRow[idx + 1];
-                    byte r = srcRow[idx + 2];
-                    byte a = srcRow[idx + 3];
+                    byte* srcRow = srcPtr + y * srcData.Stride;
+                    byte* dstRow = dstPtr + y * dstData.Stride;
 
-                    if (a == 0)
+                    for (int x = 0; x < bmp.Width; x++)
                     {
-                        dstRow[idx + 0] = 0;
-                        dstRow[idx + 1] = 0;
-                        dstRow[idx + 2] = 0;
-                        dstRow[idx + 3] = 0;
-                        continue;
-                    }
+                        int idx = x * pixelBytes;
+                        byte b = srcRow[idx + 0];
+                        byte g = srcRow[idx + 1];
+                        byte r = srcRow[idx + 2];
+                        byte a = srcRow[idx + 3];
 
-                    float luminance = (r + g + b) / 3f / 255f;
-                    dstRow[idx + 0] = (byte)(tint.B * luminance);
-                    dstRow[idx + 1] = (byte)(tint.G * luminance);
-                    dstRow[idx + 2] = (byte)(tint.R * luminance);
-                    dstRow[idx + 3] = a;
+                        if (a == 0)
+                        {
+                            dstRow[idx + 0] = 0;
+                            dstRow[idx + 1] = 0;
+                            dstRow[idx + 2] = 0;
+                            dstRow[idx + 3] = 0;
+                            continue;
+                        }
+
+                        float luminance = (r + g + b) / 3f / 255f;
+                        dstRow[idx + 0] = (byte)(tint.B * luminance);
+                        dstRow[idx + 1] = (byte)(tint.G * luminance);
+                        dstRow[idx + 2] = (byte)(tint.R * luminance);
+                        dstRow[idx + 3] = a;
+                    }
                 }
             }
         }
-
-        bmp.UnlockBits(srcData);
-        newBmp.UnlockBits(dstData);
+        finally
+        {
+            if (srcData != null) bmp.UnlockBits(srcData);
+            if (dstData != null) newBmp.UnlockBits(dstData);
+        }
 
         return newBmp;
     }
