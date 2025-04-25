@@ -280,6 +280,9 @@ namespace QMKLayerStaus
                     outputString += (char)data[i];
                 }
 
+                if(outputString.Length < 1)
+                    return;
+
                 string _layer = outputString.Trim();
 
                 switch (_layer)
@@ -288,13 +291,13 @@ namespace QMKLayerStaus
                         notifyIconLayer.Icon = Resources.actionlayer;
                         notifyIconLayer.Text = "Mouse";
                         cm.RestoreCursorColor();
-                        cm.ChangeCursorColor(Color.OrangeRed);
+                        cm.ChangeCursorColor(Color.Crimson);
                         break;
                     case string s when s.StartsWith("Layer_POINTER"):
                         notifyIconLayer.Icon = Resources.numberlayer;
                         notifyIconLayer.Text = "Pointer";
                         cm.RestoreCursorColor();
-                        cm.ChangeCursorColor(Color.DarkCyan);
+                        cm.ChangeCursorColor(Color.Lime);
                         break;
                     case string s when s.StartsWith("Layer_"):
                         notifyIconLayer.Icon = Resources.baselayer;
